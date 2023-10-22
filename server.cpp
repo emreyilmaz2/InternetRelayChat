@@ -15,6 +15,8 @@ typedef struct threadArgs_s{
 
 #define Port 6667
 
+int serverSocket;
+
 void closeSocket(int fd){
     shutdown(fd, SHUT_RDWR);
     close(fd);
@@ -24,7 +26,7 @@ int startTcpServer(short port, int numToWaitClient){
     int retval;
     struct sockaddr_in serverAddrDesc;
     int fd;
-    // int yes = 1;
+    int yes = 1;
 
     fd = socket(AF_INET, SOCK_STREAM, 0);
     if(fd < 0){
@@ -32,9 +34,18 @@ int startTcpServer(short port, int numToWaitClient){
         exit(EXIT_FAILURE);
     }
 
+
+
     serverAddrDesc.sin_family = AF_INET;
     serverAddrDesc.sin_port = htons(port);
     serverAddrDesc.sin_addr.s_addr = INADDR_ANY;
+
+    retval = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof (yes));
+    if (retval < 0) {
+        fprintf (stderr, "startTcpServer-setsockopt");
+        closeSocket (fd);
+        exit (EXIT_FAILURE);
+    }
 
     retval = bind(fd, (struct sockaddr *) &serverAddrDesc, sizeof(serverAddrDesc));
     if(retval < 0){
@@ -55,6 +66,8 @@ int startTcpServer(short port, int numToWaitClient){
 void signalHandler(int signum){
     std::cout << "olduremen beni" << std::endl;
     (void)signum;
+    closeSocket(serverSocket);
+    exit(0);
 }
 
 void setHandler(int sigNum, void(*signalHandler)(int)){
@@ -64,7 +77,7 @@ void setHandler(int sigNum, void(*signalHandler)(int)){
 void * startThread(void *arg);
 int main( void ){
     setHandler(SIGINT, signalHandler);
-    int serverSocket = startTcpServer(Port, 0);
+    serverSocket = startTcpServer(Port, 0);
 
 
     int clientId = 0;
@@ -82,7 +95,7 @@ int main( void ){
                 memcpy(&(arg->addressDesc), &clientAddrDesc, sizeof(struct sockaddr_in));
                 pthread_t tid;
                 pthread_create(&tid, NULL, startThread, arg);
-                pthread_detach(tid);
+                pthread_join(tid, NULL);
             }
             else{
                 std::cerr << "error: creating arg w/ malloc";
@@ -96,20 +109,25 @@ int main( void ){
 void * startThread(void * arg){
     threadArg * castedArg = (threadArg*)arg;
 
-    char message[1024] = {0};
     int clientid = castedArg->id;
     std::cout << "Client " << clientid << " file descriptor : " << castedArg->fd << std::endl;
     std::cout << "Client " << clientid << " address : " << ntohl(castedArg->addressDesc.sin_addr.s_addr) << std::endl;
     std::cout << "Client " << clientid << " port : " << ntohs(castedArg->addressDesc.sin_port) << std::endl;
 
-    int messageLength = recv(castedArg->fd, message, 1024, 0);
-    if(messageLength <= 0)
-        std::cerr << "no message here and : " << strerror(errno)<< std::endl;
-    else{
-        std::cout << "Client " << clientid << " says : " << message << std::endl;
-        send(castedArg->fd, "Bye little client\n", 18, 0);
+    while(1){
+        char message[1024] = {0};
+        int messageLength = recv(castedArg->fd, message, 1024, 0);
+        if(messageLength <= 0)
+            std::cerr << "no message here and : " << strerror(errno)<< std::endl;
+        else{
+            std::cout << "Client " << clientid << " says : " << message;
+            if(strcmp(message, "exit\n") == 0){
+                send(castedArg->fd, "Bye little client\n", 18, 0);
+                std::cout << "Client " << clientid << " has left\n\n";
+                break;
+            }
+        }
     }
-
     closeSocket(castedArg->fd);
     free(castedArg);
     return NULL;

@@ -40,7 +40,7 @@ int startTcpServer(short port, int numToWaitClient){
     serverAddrDesc.sin_port = htons(port);
     serverAddrDesc.sin_addr.s_addr = INADDR_ANY;
 
-    retval = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof (yes));
+    retval = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
     if (retval < 0) {
         fprintf (stderr, "startTcpServer-setsockopt");
         closeSocket (fd);
@@ -75,11 +75,12 @@ void setHandler(int sigNum, void(*signalHandler)(int)){
     signal(SIGINT, signalHandler);
 }
 void * startThread(void *arg);
+
+#include <fcntl.h>
 int main( void ){
     setHandler(SIGINT, signalHandler);
     serverSocket = startTcpServer(Port, 0);
-
-
+    // fcntl(serverSocket, F_SETFL, O_NONBLOCK);
     int clientId = 0;
     int clientfd;
     while(1){
